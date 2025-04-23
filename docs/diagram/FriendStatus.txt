@@ -1,0 +1,68 @@
+title FriendStatus
+
+participant Client
+participant Socket
+participant FriendStatusHandler
+participant Redis
+participant DB
+
+note over Client,Socket: 1. 친구 상태 소켓 연결
+Client->>Socket: 소켓 연결 요청 (/friendStatus 네임스페이스)
+Socket->>Socket: authSocketMiddleware 실행
+Socket->>DB: 사용자 정보 확인
+DB-->>Socket: 사용자 정보 반환
+Socket-->>Client: 소켓 연결 성공
+
+note over Client,Socket: 2. 초기 상태 설정
+Socket->>FriendStatusHandler: updateUserStatus(userId, "ONLINE")
+FriendStatusHandler->>Redis: 상태 정보 저장
+FriendStatusHandler->>DB: 사용자 상태 ONLINE으로 업데이트
+
+Socket->>FriendStatusHandler: sendFriendsStatus(userId, socket)
+FriendStatusHandler->>DB: 친구 목록 조회
+DB-->>FriendStatusHandler: 친구 목록 반환
+
+loop 각 친구에 대해
+    FriendStatusHandler->>DB: 친구 상태 정보 조회
+    DB-->>FriendStatusHandler: 친구 상태 정보
+    FriendStatusHandler-->>Client: "friend_status" 이벤트 (친구 ID, 상태)
+end
+
+Socket->>FriendStatusHandler: broadcastStatusToAllFriends(userId, "ONLINE")
+FriendStatusHandler->>DB: 이 사용자를 친구로 추가한 사용자 목록 조회
+DB-->>FriendStatusHandler: 사용자 목록 반환
+
+loop 각 친구에 대해
+    FriendStatusHandler-->>Socket: "friend_status_for_{friendId}" 이벤트 전송
+end
+
+note over Client,Socket: 3. 게임 상태 변경
+Client->>Socket: "GAME_STATUS_CHANGE" 이벤트
+Socket->>FriendStatusHandler: 게임 상태 변경 처리
+
+alt 게임 시작
+    FriendStatusHandler->>Redis: 상태 = "IN_GAME", 게임룸ID 설정
+    FriendStatusHandler->>DB: 사용자 상태 IN_GAME으로 업데이트
+    FriendStatusHandler->>FriendStatusHandler: 친구들에게 상태 브로드캐스트
+else 게임 종료
+    FriendStatusHandler->>Redis: 상태 = "ONLINE"
+    FriendStatusHandler->>DB: 사용자 상태 ONLINE으로 업데이트
+    FriendStatusHandler->>FriendStatusHandler: 친구들에게 상태 브로드캐스트
+end
+
+loop 각 친구에 대해
+    FriendStatusHandler-->>Socket: "friend_status_for_{friendId}" 이벤트 전송
+end
+
+note over Client,Socket: 4. 연결 종료
+Client->>Socket: 연결 종료 (disconnect)
+Socket->>FriendStatusHandler: 연결 종료 처리
+FriendStatusHandler->>Redis: 상태 = "OFFLINE", lastSeen 설정
+FriendStatusHandler->>DB: 사용자 상태 OFFLINE으로 업데이트, 마지막 접속 시간 기록
+
+FriendStatusHandler->>DB: 이 사용자를 친구로 추가한 사용자 목록 조회
+DB-->>FriendStatusHandler: 사용자 목록 반환
+
+loop 각 친구에 대해
+    FriendStatusHandler-->>Socket: "friend_status_for_{friendId}" 이벤트 (OFFLINE 상태)
+end

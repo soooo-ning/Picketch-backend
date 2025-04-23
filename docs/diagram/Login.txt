@@ -1,0 +1,91 @@
+title Login
+
+participant Client
+participant Server
+participant AuthController
+participant OAuth
+participant DB
+participant JWT
+
+Client->>Server: 소셜 로그인 요청
+Server->>AuthController: 로그인 요청 라우팅
+
+alt 카카오 로그인
+    AuthController->>OAuth: 카카오 토큰 요청
+    OAuth-->>AuthController: 액세스 토큰 반환
+    AuthController->>OAuth: 사용자 정보 요청
+    OAuth-->>AuthController: 카카오 ID 및 정보 반환
+else 구글 로그인
+    AuthController->>Client: 구글 액세스 토큰 요청
+    Client-->>AuthController: 액세스 토큰 전달
+    AuthController->>OAuth: 사용자 정보 요청
+    OAuth-->>AuthController: 구글 ID 및 정보 반환
+else 네이버 로그인
+    AuthController->>OAuth: 네이버 토큰 요청
+    OAuth-->>AuthController: 액세스 토큰 반환
+    AuthController->>OAuth: 사용자 정보 요청
+    OAuth-->>AuthController: 네이버 ID 및 정보 반환
+end
+
+AuthController->>DB: social_id & social_type으로 사용자 조회
+
+alt 기존 사용자
+    DB-->>AuthController: 사용자 정보 반환
+    
+    alt 탈퇴한 사용자
+        AuthController-->>Server: 탈퇴한 계정 오류
+        Server-->>Client: 탈퇴한 계정 응답
+    else 활성 사용자
+        AuthController->>DB: 사용자 상태 ONLINE으로 업데이트
+        DB-->>AuthController: 업데이트 완료
+    end
+else 신규 사용자
+    AuthController->>DB: 새 사용자 생성
+    note right of AuthController: 임시 닉네임, 기본 캐릭터, 기본 지역으로 생성
+    DB-->>AuthController: 생성된 사용자 정보 반환
+end
+
+AuthController->>JWT: JWT 토큰 생성 (accessToken, refreshToken)
+JWT-->>AuthController: 토큰 반환
+
+AuthController->>DB: 사용자 프로필 정보 확인
+DB-->>AuthController: 프로필 정보 (nickname, region)
+
+AuthController-->>Server: 토큰 및 사용자 정보 반환
+Server-->>Client: 응답 (토큰, 사용자 정보, hasProfile)
+
+Client->>Server: API 요청 (with Bearer token)
+Server->>JWT: 토큰 검증 (authMiddleware)
+
+alt 유효한 토큰
+    JWT-->>Server: 사용자 정보 (user_id)
+    Server->>DB: 사용자 존재 확인
+    DB-->>Server: 사용자 정보
+    Server->>Client: 요청된 데이터 반환
+else 만료된 토큰
+    JWT-->>Server: 토큰 만료 오류
+    Server-->>Client: 401 Unauthorized
+    
+    Client->>Server: 토큰 갱신 요청 (refreshToken)
+    Server->>JWT: refreshToken 검증
+    
+    alt 유효한 refreshToken
+        JWT-->>Server: 검증 성공
+        Server->>DB: 사용자 존재 확인
+        DB-->>Server: 사용자 정보
+        Server->>JWT: 새 accessToken 생성
+        JWT-->>Server: 새 accessToken
+        Server->>Client: 새 accessToken 반환
+    else 만료된 refreshToken
+        JWT-->>Server: 토큰 만료 오류
+        Server-->>Client: 다시 로그인 필요 응답
+    end
+end
+
+
+Client->>Server: 로그아웃 요청
+Server->>AuthController: 로그아웃 요청 처리
+AuthController->>DB: 사용자 상태 OFFLINE으로 변경
+DB-->>AuthController: 상태 변경 완료
+AuthController-->>Server: 로그아웃 성공
+Server-->>Client: 로그아웃 응답
