@@ -49,7 +49,7 @@
 
 ### ERD
 
-<img src="!https://github.com/user-attachments/assets/ce591236-54d8-4db4-9aa8-6580d8781cd7" width="1500px;" alt=""/>
+<img src="https://github.com/user-attachments/assets/ce591236-54d8-4db4-9aa8-6580d8781cd7" width="1500px;" alt=""/>
 <br><br>
 
 ### Sequence Diagram
