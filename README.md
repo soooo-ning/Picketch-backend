@@ -16,6 +16,7 @@
 2025.02.10 ~ 2025.02.28 (3주)
 <br><br><br>
 
+
 ## 👨‍💻 Role & Contribution
 
 #### - Backend -
@@ -48,7 +49,7 @@
 
 ### ERD
 
-<img src="https://github.com/user-attachments/assets/d53802c0-d716-4586-b55e-6b837c391443" width="1500px;" alt=""/>
+<img src="!https://github.com/user-attachments/assets/ce591236-54d8-4db4-9aa8-6580d8781cd7" width="1500px;" alt=""/>
 <br><br>
 
 ### Sequence Diagram
